@@ -7,6 +7,7 @@ interface Options {
   type?: SuggestionType;
   provinceId?: number; // province ID filter
   amphoeId?: number; // amphoe ID filter
+  tambonId?: number; // tambon ID filter
   limit?: number;
 }
 
@@ -31,20 +32,16 @@ export interface LocationResult {
  * - `provinceId` / `amphoeId` can be provided to narrow the results by ID.
  */
 export function useLocationSuggestion(search: string, options: Options = {}) {
-  const { type = "tambon", provinceId, amphoeId, limit = 20 } = options;
+  const { type = "tambon", provinceId, amphoeId, tambonId, limit = 100 } = options;
 
-  // For dropdown lists (province, amphoe, tambon), enable even with empty search
-  // For postal code suggestions, require search text
-  const enabled = type === "zip" ? Boolean(search && search.trim().length > 0) : true;
+  // For dropdown lists (province, amphoe, tambon), always enabled
+  // For postal code suggestions, also always enabled to show results immediately
+  const enabled = true;
 
   return useQuery({
-    queryKey: ["locationSuggestion", type, search, provinceId, amphoeId, limit],
+    queryKey: ["locationSuggestion", type, search, provinceId, amphoeId, tambonId, limit],
     queryFn: async () => {
-      console.log("Seaching start: ", search);
       const searchTerm = search.trim();
-
-      // For zip code, require search term
-      if (type === "zip" && !searchTerm) return [];
 
       try {
         if (type === "province") {
@@ -79,6 +76,9 @@ export function useLocationSuggestion(search: string, options: Options = {}) {
         }
         if (amphoeId) {
           query = query.eq("amphoe_id", amphoeId);
+        }
+        if (tambonId) {
+          query = query.eq("tambon_id", tambonId);
         }
 
         // Apply search filters only if search term exists

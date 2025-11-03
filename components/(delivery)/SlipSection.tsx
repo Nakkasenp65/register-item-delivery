@@ -294,9 +294,9 @@ export default function SlipSection({
 
             {/* QR Warning */}
             {qrWarning && (
-              <div className="mt-4 flex items-center gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800">
+              <div className="mt-4 flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800">
                 <AlertTriangle className="h-5 w-5 shrink-0" />
-                <span className="text-sm">ไม่พบ QR code ในรูปภาพ กรุณาอัปโหลดสลิปที่มี QR code ที่ถูกต้อง</span>
+                <span className="text-sm">กรุณาอัปโหลดภาพสลิปที่ถูกต้อง</span>
               </div>
             )}
           </div>
