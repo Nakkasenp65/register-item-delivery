@@ -175,6 +175,23 @@ const ConfirmPageContent: React.FC = () => {
               },
             ],
           },
+          footer: {
+            type: "box" as const,
+            layout: "vertical" as const,
+            spacing: "sm" as const,
+            contents: [
+              {
+                type: "button" as const,
+                style: "primary" as const,
+                height: "sm" as const,
+                action: {
+                  type: "uri" as const,
+                  label: "ดูข้อมูลการจัดส่ง",
+                  uri: "https://liff.line.me/2007338329-1LxVpq5O/confirm",
+                },
+              },
+            ],
+          },
         },
       };
       await liff.sendMessages([flexMessage]);
@@ -219,11 +236,11 @@ const ConfirmPageContent: React.FC = () => {
                   <div className="text-orange-800 space-y-2">
                     <p className="leading-relaxed">
                       เนื่องจากร้านค้าปิดทำการชั่วคราว{" "}
-                      <span className="font-semibold">ตั้งแต่วันที่ 1 - 12 พฤศจิกายน 2568</span>
+                      <span className="font-semibold">ตั้งแต่วันที่ 1 - 12 ธันวาคม 2568</span>
                     </p>
                     <p className="leading-relaxed">
                       ทางร้านจะเริ่มดำเนินการจัดส่งสินค้าในวันที่{" "}
-                      <span className="font-semibold text-orange-900">15 พฤศจิกายน 2568 เป็นต้นไป</span>
+                      <span className="font-semibold text-orange-900">15 ธันวาคม 2568 เป็นต้นไป</span>
                     </p>
                   </div>
                 </div>
