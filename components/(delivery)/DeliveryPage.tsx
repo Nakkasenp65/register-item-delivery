@@ -1,9 +1,22 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Input, Textarea, Label, Button, Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui";
+import {
+  Input,
+  Textarea,
+  Label,
+  Button,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  Combobox,
+} from "@/components/ui";
+import type { ComboboxOption } from "@/components/ui";
 import { useDebounce } from "use-debounce";
 import useLocationSuggestion from "@/hooks/useLocationSuggestion";
+import useDeliveryData from "@/hooks/useDeliveryData";
+import { supabase } from "@/lib/supabase";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { User, MapPin, Loader2, CheckCircle2, AlertCircle, ArrowLeft } from "lucide-react";
 import axios from "axios";
@@ -12,6 +25,7 @@ import SlipSection from "./SlipSection";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import liff from "@line/liff";
+import useZipLocation from "../../hooks/useZipLocation";
 
 // --- 1. Interface สำหรับ state ของฟอร์ม ---
 interface IDeliveryForm {
@@ -45,7 +59,8 @@ const DeliveryPage: React.FC = () => {
   const [queryClient] = useState(() => new QueryClient());
   const [provinceId, setProvinceId] = useState<number | undefined>();
   const [amphoeId, setAmphoeId] = useState<number | undefined>();
-  const [showZipSuggestions, setShowZipSuggestions] = useState(false);
+  const [tambonId, setTambonId] = useState<number | undefined>();
+  const [zipSearch, setZipSearch] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [isError, setIsError] = useState(false);
@@ -54,6 +69,16 @@ const DeliveryPage: React.FC = () => {
   const { lineUserId } = useLiff();
   const router = useRouter();
 
+  // ตรวจสอบว่า user เคยกรอกข้อมูลแล้วหรือยัง
+  const { data: existingData, isLoading: isCheckingData } = useDeliveryData(lineUserId);
+
+  // ถ้ามีข้อมูลแล้ว redirect ไปหน้า confirm
+  useEffect(() => {
+    if (existingData && existingData.data && existingData.data.length > 0) {
+      router.push("/confirm");
+    }
+  }, [existingData, router]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
@@ -61,25 +86,24 @@ const DeliveryPage: React.FC = () => {
       [name]: value,
     }));
 
-    // Re-enable suggestions when user types postal code
-    if (name === "postalCode") setShowZipSuggestions(false);
-
     // Reset dependent fields when province/district changes
     if (name === "province") {
       setFormData((prev) => ({
         ...prev,
         district: "",
         subDistrict: "",
-        // postalCode: "",
+        postalCode: "",
       }));
       setAmphoeId(undefined);
+      setTambonId(undefined);
     }
     if (name === "district") {
       setFormData((prev) => ({
         ...prev,
         subDistrict: "",
-        // postalCode: "",
+        postalCode: "",
       }));
+      setTambonId(undefined);
     }
   };
 
@@ -297,17 +321,17 @@ const DeliveryPage: React.FC = () => {
     };
   }, [previewUrl]);
 
-  // Debounced search value for postal code only
-  const [debZip] = useDebounce(formData.postalCode, 300);
+  // Debounced search value for zip search
+  const [debouncedZipSearch] = useDebounce(zipSearch, 300);
 
   // Fetch all provinces for dropdown
-  const provinceQ = useLocationSuggestion("", { type: "province", limit: 100 });
+  const provinceQ = useLocationSuggestion("", { type: "province", limit: 300 });
 
   // Fetch amphoes based on selected province
   const districtQ = useLocationSuggestion("", {
     type: "amphoe",
     provinceId,
-    limit: 100,
+    limit: 300,
   });
 
   // Fetch tambons based on selected province and amphoe
@@ -315,20 +339,66 @@ const DeliveryPage: React.FC = () => {
     type: "tambon",
     provinceId,
     amphoeId,
-    limit: 200,
+    limit: 300,
   });
 
-  // Query for postal code suggestions only
-  const zipQ = useLocationSuggestion(debZip, {
-    type: "zip",
-    provinceId,
-    amphoeId,
-    limit: 20,
+  // Query for postal code suggestions with filters
+  // ใช้ debouncedZipSearch เพื่อ filter ตามที่พิมพ์
+  // และ filter ตาม province/amphoe/tambon ที่เลือกไว้
+  const zipQ = useZipLocation(debouncedZipSearch, {
+    limit: 100,
   });
+
+  // Auto-fill รหัสไปรษณีย์เมื่อเลือกจังหวัด อำเภอ และตำบลครบ
+  useEffect(() => {
+    if (provinceId && amphoeId && tambonId && !formData.postalCode) {
+      // Query เพื่อหารหัสไปรษณีย์ของตำบลที่เลือก
+      const autoFillZip = async () => {
+        try {
+          const { data } = await supabase
+            .from("zip_code_view")
+            .select("*")
+            .eq("province_id", provinceId)
+            .eq("amphoe_id", amphoeId)
+            .eq("tambon_id", tambonId)
+            .limit(1);
+
+          if (data && data.length > 0) {
+            const zipCode = data[0].zip_code;
+            if (zipCode) {
+              setFormData((prev) => ({
+                ...prev,
+                postalCode: zipCode,
+              }));
+            }
+          }
+        } catch (error) {
+          console.error("Error auto-filling postal code:", error);
+        }
+      };
+
+      autoFillZip();
+    }
+  }, [provinceId, amphoeId, tambonId, formData.postalCode]);
 
   // (UI styling is provided by shadcn-style components in `components/ui`)
 
   // --- 5. JSX Render ---
+
+  // แสดง loading ระหว่างตรวจสอบข้อมูล
+  if (isCheckingData) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <div className="min-h-screen bg-white flex items-center justify-center">
+          <div className="flex flex-col items-center space-y-4">
+            <Loader2 className="w-12 h-12 animate-spin text-blue-600" />
+            <p className="text-gray-600">กำลังตรวจสอบข้อมูล...</p>
+          </div>
+        </div>
+      </QueryClientProvider>
+    );
+  }
+
   return (
     <QueryClientProvider client={queryClient}>
       {/* Loading Dialog */}
@@ -432,9 +502,10 @@ const DeliveryPage: React.FC = () => {
                           <div className="text-sm text-orange-800 space-y-2">
                             <p className="leading-relaxed">
                               ลงทะเบียนส่งคืนกล่องสินค้า เนื่องจากร้านค้ากำลังอยู่ในระหว่างการรีโนเวท{" "}
+                              <b>
+                                <u>ตั้งแต่วันที่ 1 พฤศจิกายน - 12 ธันวาคม 2568</u>
+                              </b>
                             </p>
-
-                            <span className="font-semibold mb-2">ตั้งแต่วันที่ 1 - 12 ธันวาคม 2568</span>
 
                             <p className="leading-relaxed">
                               ทางร้านจะเริ่มดำเนินการจัดส่งสินค้าในวันที่{" "}
@@ -516,7 +587,63 @@ const DeliveryPage: React.FC = () => {
                     </h2>
                     <div className="space-y-6">
                       {/* --- Grid สำหรับ ที่อยู่ส่วนย่อย --- */}
+
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* --- รหัสไปรษณีย์ --- */}
+                        <div>
+                          <Label htmlFor="postalCode">รหัสไปรษณีย์</Label>
+
+                          <Combobox
+                            options={(() => {
+                              const options =
+                                zipQ.data?.map((r) => {
+                                  const zip = r.zip_code ?? "";
+                                  const tambon = r.tambon_name_th ?? r.tambon_name_en ?? "";
+                                  const amphoe = r.amphoe_name_th ?? r.amphoe_name_en ?? "";
+                                  const province = r.province_name_th ?? r.province_name_en ?? "";
+                                  return {
+                                    value: zip,
+                                    label: zip,
+                                    subLabel: `${tambon} • ${amphoe} • ${province}`,
+                                    data: r,
+                                  } as ComboboxOption;
+                                }) ?? [];
+
+                              // ถ้ามีค่าใน postalCode แต่ไม่มีใน options ให้เพิ่ม ghost option
+                              if (formData.postalCode && !options.find((opt) => opt.value === formData.postalCode)) {
+                                options.unshift({
+                                  value: formData.postalCode,
+                                  label: formData.postalCode,
+                                  subLabel: `${formData.subDistrict} • ${formData.district} • ${formData.province}`,
+                                  data: null,
+                                });
+                              }
+
+                              return options;
+                            })()}
+                            value={formData.postalCode}
+                            onOptionSelect={(option) => {
+                              const selectedZip = option.data;
+                              if (selectedZip) {
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  postalCode: option.value,
+                                  subDistrict: selectedZip.tambon_name_th ?? selectedZip.tambon_name_en ?? "",
+                                  district: selectedZip.amphoe_name_th ?? selectedZip.amphoe_name_en ?? "",
+                                  province: selectedZip.province_name_th ?? selectedZip.province_name_en ?? "",
+                                }));
+                                setProvinceId(selectedZip.province_id);
+                                setAmphoeId(selectedZip.amphoe_id);
+                              }
+                            }}
+                            onSearchChange={setZipSearch}
+                            placeholder="เลือกรหัสไปรษณีย์"
+                            searchPlaceholder="ค้นหารหัสไปรษณีย์..."
+                            emptyText="ลองพิมพ์เพื่อค้นหารหัสไปรษณีย์"
+                            disabled={false}
+                          />
+                        </div>
+
                         {/* --- จังหวัด --- */}
                         <div>
                           <Label htmlFor="province">จังหวัด</Label>
@@ -587,7 +714,15 @@ const DeliveryPage: React.FC = () => {
                             id="subDistrict"
                             name="subDistrict"
                             value={formData.subDistrict}
-                            onChange={handleChange}
+                            onChange={(e) => {
+                              handleChange(e);
+                              const selectedTambon = tambonQ.data?.find(
+                                (t) => (t.tambon_name_th ?? t.tambon_name_en) === e.target.value
+                              );
+                              if (selectedTambon) {
+                                setTambonId(selectedTambon.tambon_id);
+                              }
+                            }}
                             className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-100"
                             disabled={!amphoeId}
                             required
@@ -602,57 +737,6 @@ const DeliveryPage: React.FC = () => {
                               );
                             })}
                           </select>
-                        </div>
-
-                        {/* --- รหัสไปรษณีย์ --- */}
-                        <div className="relative">
-                          <Label htmlFor="postalCode">รหัสไปรษณีย์</Label>
-                          <Input
-                            type="text"
-                            id="postalCode"
-                            name="postalCode"
-                            value={formData.postalCode}
-                            onChange={handleChange}
-                            inputMode="numeric" // แสดงแป้นพิมพ์ตัวเลขบนมือถือ
-                            pattern="\d{5}" // ตรวจสอบว่ามี 5 หลัก
-                            maxLength={5}
-                            required
-                            autoComplete="non-complete-field"
-                          />
-                          {Array.isArray(zipQ.data) && debZip && zipQ.data.length > 0 && showZipSuggestions && (
-                            <ul className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
-                              {zipQ.data.map((r, idx: number) => {
-                                const zip = r.zip_code ?? "";
-                                const tambon = r.tambon_name_th ?? r.tambon_name_en ?? "";
-                                const amphoe = r.amphoe_name_th ?? r.amphoe_name_en ?? "";
-                                const province = r.province_name_th ?? r.province_name_en ?? "";
-                                return (
-                                  <li
-                                    key={`z-${idx}-${r.zip_code}`}
-                                    className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                                    onMouseDown={(ev) => ev.preventDefault()}
-                                    onClick={() => {
-                                      setFormData((prev) => ({
-                                        ...prev,
-                                        postalCode: zip,
-                                        subDistrict: tambon,
-                                        district: amphoe,
-                                        province: province,
-                                      }));
-                                      setProvinceId(r.province_id);
-                                      setAmphoeId(r.amphoe_id);
-                                      setShowZipSuggestions(false);
-                                    }}
-                                  >
-                                    <div className="text-sm font-medium text-gray-800">{zip}</div>
-                                    <div className="text-xs text-gray-500">
-                                      {tambon} • {amphoe} • {province}
-                                    </div>
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          )}
                         </div>
                       </div>
                       {/* --- ที่อยู่ (รายละเอียด) --- */}

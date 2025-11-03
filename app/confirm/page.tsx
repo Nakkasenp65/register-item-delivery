@@ -236,7 +236,7 @@ const ConfirmPageContent: React.FC = () => {
                   <div className="text-orange-800 space-y-2">
                     <p className="leading-relaxed">
                       เนื่องจากร้านค้าปิดทำการชั่วคราว{" "}
-                      <span className="font-semibold">ตั้งแต่วันที่ 1 - 12 ธันวาคม 2568</span>
+                      <span className="font-semibold">ตั้งแต่วันที่ 1 พฤศจิกายน - 12 ธันวาคม 2568</span>
                     </p>
                     <p className="leading-relaxed">
                       ทางร้านจะเริ่มดำเนินการจัดส่งสินค้าในวันที่{" "}

@@ -15,7 +15,7 @@ interface UpdateDeliveryPayload {
 }
 
 // GET - ค้นหาข้อมูลโดยใช้ MongoDB ObjectId
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
 
@@ -47,7 +47,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
 }
 
 // PUT - อัปเดตข้อมูลโดยใช้ MongoDB ObjectId
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
 
