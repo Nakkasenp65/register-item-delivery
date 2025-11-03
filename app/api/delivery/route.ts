@@ -15,6 +15,7 @@ interface DeliveryPayload {
   postalCode: string;
   slipImageUrl: string;
   createdAt: Date;
+  status: string;
 }
 
 export async function POST(request: Request) {
@@ -70,6 +71,8 @@ export async function POST(request: Request) {
       slipImageUrl: uploadedFileData.url,
       createdAt: new Date(),
     } as DeliveryPayload;
+
+    console.log("Payload: ", toInsert);
 
     const result = await collection.insertOne(toInsert);
 

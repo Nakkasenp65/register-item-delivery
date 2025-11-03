@@ -37,6 +37,7 @@ interface IDeliveryForm {
   district: string;
   province: string;
   postalCode: string;
+  status: "pending";
 }
 
 // --- 2. State เริ่มต้น ---
@@ -49,6 +50,7 @@ const initialFormState: IDeliveryForm = {
   district: "",
   province: "",
   postalCode: "",
+  status: "pending",
 };
 
 // --- Component ---
@@ -139,6 +141,8 @@ const DeliveryPage: React.FC = () => {
 
       // เพิ่มข้อมูลฟอร์มเป็น JSON string
       formDataToSend.append("data", JSON.stringify(dataToSend));
+
+      console.log("✅ FormData to send: ", formDataToSend);
 
       // ส่ง request ไปยัง API
       await axios.post("/api/delivery", formDataToSend, {
@@ -322,7 +326,7 @@ const DeliveryPage: React.FC = () => {
   }, [previewUrl]);
 
   // Debounced search value for zip search
-  const [debouncedZipSearch] = useDebounce(zipSearch, 300);
+  const [debouncedZipSearch] = useDebounce(zipSearch, 400);
 
   // Fetch all provinces for dropdown
   const provinceQ = useLocationSuggestion("", { type: "province", limit: 300 });

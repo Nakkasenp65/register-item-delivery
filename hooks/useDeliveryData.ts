@@ -13,6 +13,7 @@ interface DeliveryData {
   postalCode: string;
   slipImageUrl?: string;
   createdAt: string;
+  status: string;
 }
 
 interface DeliveryResponse {
