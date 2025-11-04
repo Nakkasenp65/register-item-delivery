@@ -6,14 +6,16 @@ interface DeliveryData {
   customerName: string;
   line_user_id: string;
   phone: string;
-  addressDetails: string;
-  subDistrict: string;
-  district: string;
-  province: string;
-  postalCode: string;
+  addressDetails?: string;
+  subDistrict?: string;
+  district?: string;
+  province?: string;
+  postalCode?: string;
   slipImageUrl?: string;
   createdAt: string;
   status: string;
+  trackingId?: string;
+  locationType?: "home" | "store";
 }
 
 interface DeliveryResponse {
