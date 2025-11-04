@@ -1,24 +1,16 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import {
-  Input,
-  Textarea,
-  Label,
-  Button,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  Combobox,
-} from "@/components/ui";
-import type { ComboboxOption } from "@/components/ui";
+import { Input, Label, Button, Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui";
+import AddressForm from "@/components/(delivery)/AddressForm";
+// type ComboboxOption removed (not used here)
 import { useDebounce } from "use-debounce";
 import useLocationSuggestion from "@/hooks/useLocationSuggestion";
 import useDeliveryData from "@/hooks/useDeliveryData";
 import { supabase } from "@/lib/supabase";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { User, MapPin, Loader2, CheckCircle2, AlertCircle, ArrowLeft } from "lucide-react";
+import { User, Loader2, CheckCircle2, AlertCircle, ArrowLeft, Package, Clock, MapPinned } from "lucide-react";
+import { FaMapMarkedAlt } from "react-icons/fa";
 import axios from "axios";
 import { useLiff } from "../providers/LiffProvider";
 import SlipSection from "./SlipSection";
@@ -26,6 +18,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import liff from "@line/liff";
 import useZipLocation from "../../hooks/useZipLocation";
+import { Home, Store } from "lucide-react";
 
 // --- 1. Interface สำหรับ state ของฟอร์ม ---
 interface IDeliveryForm {
@@ -58,6 +51,7 @@ const DeliveryPage: React.FC = () => {
   const [formData, setFormData] = useState<IDeliveryForm>(initialFormState);
   const [attachment, setAttachment] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [locationType, setLocationType] = useState<"home" | "store">("home");
   const [queryClient] = useState(() => new QueryClient());
   const [provinceId, setProvinceId] = useState<number | undefined>();
   const [amphoeId, setAmphoeId] = useState<number | undefined>();
@@ -68,6 +62,7 @@ const DeliveryPage: React.FC = () => {
   const [isError, setIsError] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [currentPage, setCurrentPage] = useState<1 | 2>(1);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const { lineUserId } = useLiff();
   const router = useRouter();
 
@@ -114,12 +109,22 @@ const DeliveryPage: React.FC = () => {
     // Validate page 1 fields
     const form = e.currentTarget;
     if (form.checkValidity()) {
-      setCurrentPage(2);
+      // ถ้าเลือกรับเองที่หน้าร้าน ให้แสดง modal ยืนยัน
+      if (locationType === "store") {
+        setShowConfirmModal(true);
+      } else {
+        // ถ้าส่งถึงบ้าน ให้ไปหน้า 2 เพื่ออัปโหลดสลิป
+        setCurrentPage(2);
+      }
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const handleConfirmStorePickup = async () => {
+    setShowConfirmModal(false);
+    await submitForm();
+  };
+
+  const submitForm = async () => {
     setIsLoading(true);
     setIsError(false);
     setErrorMessage("");
@@ -128,34 +133,100 @@ const DeliveryPage: React.FC = () => {
       // สร้าง FormData สำหรับส่ง multipart
       const formDataToSend = new FormData();
 
-      // เพิ่มไฟล์ (ถ้ามี)
-      if (attachment) {
+      // เพิ่มไฟล์ (ถ้ามี) - เฉพาะกรณีส่งถึงบ้าน
+      if (attachment && locationType === "home") {
         formDataToSend.append("file", attachment);
       }
 
-      // เพิ่ม line_user_id ก่อนส่ง
-      const dataToSend = {
-        ...formData,
-        line_user_id: lineUserId ?? "",
-      };
+      // สร้าง payload ขึ้นอยู่กับวิธีรับ (locationType)
+      let dataToSend: Partial<IDeliveryForm> & { locationType: string; line_user_id: string };
+      if (locationType === "store") {
+        // ส่งแบบรับที่หน้าร้าน: ส่งเฉพาะข้อมูลส่วนตัว ไม่ต้องส่งฟิลด์ที่อยู่
+        // Omit address-related fields by destructuring into underscore-prefixed vars
+        const { addressDetails, subDistrict, district, province, postalCode, ...rest } = formData as IDeliveryForm;
+        // mark the removed fields as used to avoid unused-variable lint errors
+        void addressDetails;
+        void subDistrict;
+        void district;
+        void province;
+        void postalCode;
+
+        dataToSend = {
+          ...rest,
+          locationType: "store",
+          line_user_id: lineUserId ?? "",
+        };
+      } else {
+        // ส่งแบบส่งถึงบ้าน: ส่งทุกฟิลด์ที่อยู่ตามเดิม
+        dataToSend = {
+          ...formData,
+          locationType: "home",
+          line_user_id: lineUserId ?? "",
+        };
+      }
 
       // เพิ่มข้อมูลฟอร์มเป็น JSON string
       formDataToSend.append("data", JSON.stringify(dataToSend));
 
-      console.log("✅ FormData to send: ", formDataToSend);
+      console.log("✅ FormData to send data field: ", dataToSend);
 
-      // ส่ง request ไปยัง API
-      await axios.post("/api/delivery", formDataToSend, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      });
+      // ส่ง request ไปยัง API (อย่าเซ็ต Content-Type ให้ axios/เบราว์เซอร์จัดการ boundary ให้)
+      const response = await axios.post("/api/delivery", formDataToSend);
+      const trackingId = response.data?.trackingId || "N/A";
 
       // แสดง success dialog
       setIsSuccess(true);
 
       // ส่ง LINE Flex Message ทันทีหลังจากบันทึกสำเร็จ
       try {
+        // สร้าง location/address box ตาม locationType
+        const locationBox =
+          dataToSend.locationType === "home"
+            ? {
+                type: "box" as const,
+                layout: "baseline" as const,
+                contents: [
+                  {
+                    type: "text" as const,
+                    text: "ที่อยู่:",
+                    color: "#aaaaaa",
+                    size: "sm" as const,
+                    flex: 1,
+                  },
+                  {
+                    type: "text" as const,
+                    text: `${dataToSend.addressDetails || ""}, ${dataToSend.subDistrict || ""}, ${
+                      dataToSend.district || ""
+                    }, ${dataToSend.province || ""} ${dataToSend.postalCode || ""}`.trim(),
+                    wrap: true,
+                    color: "#666666",
+                    size: "sm" as const,
+                    flex: 5,
+                  },
+                ],
+              }
+            : {
+                type: "box" as const,
+                layout: "baseline" as const,
+                contents: [
+                  {
+                    type: "text" as const,
+                    text: "รับที่:",
+                    color: "#aaaaaa",
+                    size: "sm" as const,
+                    flex: 1,
+                  },
+                  {
+                    type: "text" as const,
+                    text: "ร้าน OK Mobile (15 ธ.ค. 68 เป็นต้นไป)",
+                    wrap: true,
+                    color: "#666666",
+                    size: "sm" as const,
+                    flex: 5,
+                  },
+                ],
+              };
+
         const flexMessage = {
           type: "flex" as const,
           altText: "ข้อมูลการจัดส่ง",
@@ -184,6 +255,28 @@ const DeliveryPage: React.FC = () => {
                       contents: [
                         {
                           type: "text" as const,
+                          text: "รหัส:",
+                          color: "#aaaaaa",
+                          size: "sm" as const,
+                          flex: 1,
+                        },
+                        {
+                          type: "text" as const,
+                          text: trackingId,
+                          wrap: true,
+                          color: "#1e40af",
+                          size: "sm" as const,
+                          flex: 5,
+                          weight: "bold" as const,
+                        },
+                      ],
+                    },
+                    {
+                      type: "box" as const,
+                      layout: "baseline" as const,
+                      contents: [
+                        {
+                          type: "text" as const,
                           text: "ชื่อ:",
                           color: "#aaaaaa",
                           size: "sm" as const,
@@ -191,7 +284,7 @@ const DeliveryPage: React.FC = () => {
                         },
                         {
                           type: "text" as const,
-                          text: dataToSend.customerName,
+                          text: dataToSend.customerName || "",
                           wrap: true,
                           color: "#666666",
                           size: "sm" as const,
@@ -212,7 +305,7 @@ const DeliveryPage: React.FC = () => {
                         },
                         {
                           type: "text" as const,
-                          text: dataToSend.phone,
+                          text: dataToSend.phone || "",
                           wrap: true,
                           color: "#666666",
                           size: "sm" as const,
@@ -220,27 +313,7 @@ const DeliveryPage: React.FC = () => {
                         },
                       ],
                     },
-                    {
-                      type: "box" as const,
-                      layout: "baseline" as const,
-                      contents: [
-                        {
-                          type: "text" as const,
-                          text: "ที่อยู่:",
-                          color: "#aaaaaa",
-                          size: "sm" as const,
-                          flex: 1,
-                        },
-                        {
-                          type: "text" as const,
-                          text: `${dataToSend.addressDetails}, ${dataToSend.subDistrict}, ${dataToSend.district}, ${dataToSend.province} ${dataToSend.postalCode}`,
-                          wrap: true,
-                          color: "#666666",
-                          size: "sm" as const,
-                          flex: 5,
-                        },
-                      ],
-                    },
+                    locationBox,
                     {
                       type: "box" as const,
                       layout: "baseline" as const,
@@ -313,6 +386,11 @@ const DeliveryPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    await submitForm();
   };
 
   // --- File input handler ---
@@ -475,6 +553,65 @@ const DeliveryPage: React.FC = () => {
         </DialogContent>
       </Dialog>
 
+      {/* Confirm Store Pickup Dialog */}
+      <Dialog open={showConfirmModal} onOpenChange={setShowConfirmModal}>
+        <DialogContent className="sm:max-w-md ">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3 text-blue-600">
+              <Store className="w-6 h-6" />
+              ยืนยันการรับกล่องสินค้าเองที่หน้าร้าน
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="flex flex-col space-y-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <MapPinned className="w-5 h-5 text-blue-600 mt-1 shrink-0" />
+                  <div className="flex-1">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-2">สถานที่รับสินค้า</h4>
+                    <p className="text-sm text-gray-700">
+                      <strong>ร้าน OK Mobile ห้าง Center One</strong>
+                      <br />
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <Clock className="w-5 h-5 text-orange-600 mt-1 shrink-0" />
+                  <div className="flex-1">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-2">วันที่สามารถรับได้</h4>
+                    <p className="text-sm text-gray-700">
+                      <strong>ตั้งแต่วันที่ 15 ธันวาคม 2568 เป็นต้นไป</strong>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <Button
+              onClick={() => setShowConfirmModal(false)}
+              className="flex-1 bg-gray-200 text-gray-700 hover:bg-gray-300"
+              disabled={isLoading}
+            >
+              ยกเลิก
+            </Button>
+            <Button onClick={handleConfirmStorePickup} className="flex-1" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  กำลังบันทึก...
+                </>
+              ) : (
+                "ยืนยัน"
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <div className="bg-white min-h-screen py-10">
         <div className="max-w-3xl mx-auto p-6 md:p-8 bg-white ">
           {/* --- Main Heading --- */}
@@ -583,188 +720,124 @@ const DeliveryPage: React.FC = () => {
                     </div>
                   </section>
 
-                  {/* ========== Section 2: ข้อมูลที่อยู่ ========== */}
                   <section>
                     <h2 className="text-xl font-semibold text-gray-700 mb-4 border-b pb-2 flex items-center gap-3">
-                      <MapPin className="w-6 h-6 text-green-600" />
-                      ข้อมูลที่อยู่
+                      <Package className="w-6 h-6 text-blue-600" />
+                      การรับสินค้า
                     </h2>
-                    <div className="space-y-6">
-                      {/* --- Grid สำหรับ ที่อยู่ส่วนย่อย --- */}
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* --- รหัสไปรษณีย์ --- */}
-                        <div>
-                          <Label htmlFor="postalCode">รหัสไปรษณีย์</Label>
-
-                          <Combobox
-                            options={(() => {
-                              const options =
-                                zipQ.data?.map((r) => {
-                                  const zip = r.zip_code ?? "";
-                                  const tambon = r.tambon_name_th ?? r.tambon_name_en ?? "";
-                                  const amphoe = r.amphoe_name_th ?? r.amphoe_name_en ?? "";
-                                  const province = r.province_name_th ?? r.province_name_en ?? "";
-                                  return {
-                                    value: zip,
-                                    label: zip,
-                                    subLabel: `${tambon} • ${amphoe} • ${province}`,
-                                    data: r,
-                                  } as ComboboxOption;
-                                }) ?? [];
-
-                              // ถ้ามีค่าใน postalCode แต่ไม่มีใน options ให้เพิ่ม ghost option
-                              if (formData.postalCode && !options.find((opt) => opt.value === formData.postalCode)) {
-                                options.unshift({
-                                  value: formData.postalCode,
-                                  label: formData.postalCode,
-                                  subLabel: `${formData.subDistrict} • ${formData.district} • ${formData.province}`,
-                                  data: null,
-                                });
-                              }
-
-                              return options;
-                            })()}
-                            value={formData.postalCode}
-                            onOptionSelect={(option) => {
-                              const selectedZip = option.data;
-                              if (selectedZip) {
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  postalCode: option.value,
-                                  subDistrict: selectedZip.tambon_name_th ?? selectedZip.tambon_name_en ?? "",
-                                  district: selectedZip.amphoe_name_th ?? selectedZip.amphoe_name_en ?? "",
-                                  province: selectedZip.province_name_th ?? selectedZip.province_name_en ?? "",
-                                }));
-                                setProvinceId(selectedZip.province_id);
-                                setAmphoeId(selectedZip.amphoe_id);
-                              }
-                            }}
-                            onSearchChange={setZipSearch}
-                            placeholder="เลือกรหัสไปรษณีย์"
-                            searchPlaceholder="ค้นหารหัสไปรษณีย์..."
-                            emptyText="ลองพิมพ์เพื่อค้นหารหัสไปรษณีย์"
-                            disabled={false}
-                          />
-                        </div>
-
-                        {/* --- จังหวัด --- */}
-                        <div>
-                          <Label htmlFor="province">จังหวัด</Label>
-                          <select
-                            id="province"
-                            name="province"
-                            value={formData.province}
-                            onChange={(e) => {
-                              handleChange(e);
-                              const selectedProvince = provinceQ.data?.find(
-                                (p) => (p.province_name_th ?? p.province_name_en) === e.target.value
-                              );
-                              if (selectedProvince) {
-                                setProvinceId(selectedProvince.province_id);
-                              }
-                            }}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            required
-                          >
-                            <option value="">-- เลือกจังหวัด --</option>
-                            {provinceQ.data?.map((p) => {
-                              const label = p.province_name_th ?? p.province_name_en ?? "";
-                              return (
-                                <option key={p.province_id} value={label}>
-                                  {label}
-                                </option>
-                              );
-                            })}
-                          </select>
-                        </div>
-
-                        {/* --- อำเภอ/เขต --- */}
-                        <div>
-                          <Label htmlFor="district">อำเภอ/เขต</Label>
-                          <select
-                            id="district"
-                            name="district"
-                            value={formData.district}
-                            onChange={(e) => {
-                              handleChange(e);
-                              const selectedDistrict = districtQ.data?.find(
-                                (d) => (d.amphoe_name_th ?? d.amphoe_name_en) === e.target.value
-                              );
-                              if (selectedDistrict) {
-                                setAmphoeId(selectedDistrict.amphoe_id);
-                              }
-                            }}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-100"
-                            disabled={!provinceId}
-                            required
-                          >
-                            <option value="">-- เลือกอำเภอ/เขต --</option>
-                            {districtQ.data?.map((d) => {
-                              const label = d.amphoe_name_th ?? d.amphoe_name_en ?? "";
-                              return (
-                                <option key={d.amphoe_id} value={label}>
-                                  {label}
-                                </option>
-                              );
-                            })}
-                          </select>
-                        </div>
-
-                        {/* --- ตำบล/แขวง --- */}
-                        <div>
-                          <Label htmlFor="subDistrict">ตำบล/แขวง</Label>
-                          <select
-                            id="subDistrict"
-                            name="subDistrict"
-                            value={formData.subDistrict}
-                            onChange={(e) => {
-                              handleChange(e);
-                              const selectedTambon = tambonQ.data?.find(
-                                (t) => (t.tambon_name_th ?? t.tambon_name_en) === e.target.value
-                              );
-                              if (selectedTambon) {
-                                setTambonId(selectedTambon.tambon_id);
-                              }
-                            }}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-100"
-                            disabled={!amphoeId}
-                            required
-                          >
-                            <option value="">-- เลือกตำบล/แขวง --</option>
-                            {tambonQ.data?.map((t) => {
-                              const label = t.tambon_name_th ?? t.tambon_name_en ?? "";
-                              return (
-                                <option key={t.tambon_id} value={label}>
-                                  {label}
-                                </option>
-                              );
-                            })}
-                          </select>
-                        </div>
-                      </div>
-                      {/* --- ที่อยู่ (รายละเอียด) --- */}
-                      <div>
-                        <Label htmlFor="addressDetails">รายละเอียดที่อยู่ (บ้านเลขที่, ถนน, หมู่บ้าน, ฯลฯ)</Label>
-                        <Textarea
-                          id="addressDetails"
-                          name="addressDetails"
-                          rows={3}
-                          value={formData.addressDetails}
-                          onChange={handleChange}
-                          className="min-h-20 resize-y"
-                          placeholder="เช่น 99/9 หมู่ 1 ถ.สุขุมวิท ซ. 101"
-                          autoComplete="non-complete-field"
-                          required
-                        />
-                      </div>
+                    <div className="flex gap-4">
+                      <Button
+                        type="button"
+                        onClick={() => setLocationType("home")}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors duration-300 ${
+                          locationType === "home"
+                            ? "bg-blue-500 text-white hover:bg-blue-600"
+                            : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                        }`}
+                      >
+                        <Home className={`w-5 h-5 ${locationType === "home" ? "text-white" : "text-gray-500"}`} />
+                        ส่งไปยังที่อยู่
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={() => setLocationType("store")}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors duration-300 ${
+                          locationType === "store"
+                            ? "bg-blue-500 text-white hover:bg-blue-600"
+                            : "bg-gray-300 text-gray-700 hover:bg-gray-400"
+                        }`}
+                      >
+                        <Store className={`w-10 h-10 ${locationType === "store" ? "text-white" : "text-blue-500"}`} />
+                        รับกล่องสินค้าเองที่หน้าร้าน
+                      </Button>
                     </div>
+                    <div className="mt-3 text-base text-gray-600">
+                      {locationType === "home" && (
+                        <div className="flex items-center justify-center mt-8 p-2 border border-orange-500 rounded-lg gap-2">
+                          <span className="inline-block w-2 h-2 rounded-full bg-orange-500 " />
+                          <span className="text-orange-500">โอนค่าจัดส่ง 100 บาทและแนบสลิปในหน้าถัดไป</span>
+                        </div>
+                      )}
+                    </div>
+                  </section>
+
+                  {/* ========== Section 2: ข้อมูลที่อยู่ ========== */}
+                  <section>
+                    {locationType === "home" && (
+                      <AddressForm
+                        formData={formData}
+                        handleChange={handleChange}
+                        zipQ={zipQ}
+                        provinceQ={provinceQ}
+                        districtQ={districtQ}
+                        tambonQ={tambonQ}
+                        setFormData={setFormData}
+                        provinceId={provinceId}
+                        setProvinceId={setProvinceId}
+                        amphoeId={amphoeId}
+                        setAmphoeId={setAmphoeId}
+                        setTambonId={setTambonId}
+                        setZipSearch={setZipSearch}
+                      />
+                    )}
+
+                    {locationType === "store" && (
+                      <div className="relative bg-white border border-indigo-200 rounded-2xl shadow-lg overflow-hidden">
+                        {/* Gradient Background Overlay */}
+                        <div className="absolute inset-0 bg-linear-to-br from-indigo-50 via-blue-50 to-indigo-100 opacity-60"></div>
+
+                        {/* Decorative Elements */}
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-400 rounded-full blur-3xl opacity-20 -mr-16 -mt-16"></div>
+                        <div className="absolute bottom-0 left-0 w-24 h-24 bg-blue-400 rounded-full blur-2xl opacity-20 -ml-12 -mb-12"></div>
+
+                        <div className="relative p-6">
+                          <div className="flex items-start gap-5">
+                            {/* Content Section */}
+                            <div className="flex-1 space-y-3">
+                              <div className="flex items-center gap-3 flex-wrap">
+                                {/* Icon Section */}
+                                <div className="shrink-0">
+                                  <div className="relative">
+                                    <div className="w-16 h-16 bg-linear-to-br from-indigo-400 to-blue-500 rounded-2xl flex items-center justify-center shadow-lg transform rotate-3 hover:rotate-6 transition-transform">
+                                      <MapPinned className="w-8 h-8 text-white animate-pulse" />
+                                    </div>
+                                    <div className="absolute -top-1 -right-1 w-5 h-5 bg-blue-500 rounded-full animate-ping opacity-75"></div>
+                                    <div className="absolute -top-1 -right-1 w-5 h-5 bg-blue-500 rounded-full"></div>
+                                  </div>
+                                </div>
+                                <div>
+                                  <h3 className="text-2xl font-bold text-gray-900">ร้าน OK Mobile </h3>
+                                </div>
+                              </div>
+
+                              <div className="space-y-2.5">
+                                <a
+                                  href="https://www.google.com/maps/place/OK+Mobile+Shop+%E0%B8%AA%E0%B8%B2%E0%B8%82%E0%B8%B2+%E0%B8%AB%E0%B9%89%E0%B8%B2%E0%B8%87%E0%B9%80%E0%B8%8B%E0%B9%87%E0%B8%99%E0%B9%80%E0%B8%95%E0%B8%AD%E0%B8%A3%E0%B9%8C%E0%B8%A7%E0%B8%B1%E0%B8%99/@13.7639334,100.5391967,21z/data=!4m6!3m5!1s0x30e29fcf8d4ea5a5:0x23cc79f7dccc9f87!8m2!3d13.7638505!4d100.5393062!16s%2Fg%2F11gy9m3fcg?entry=ttu&g_ep=EgoyMDI1MTAyOS4yIKXMDSoASAFQAw%3D%3D"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  <div className="flex justify-center items-center gap-3 p-3 bg-white/60 backdrop-blur-sm rounded-xl border-2 border-indigo-200/50">
+                                    <div>
+                                      <p className="text-base text-black font-bold ">กดที่นี่เพื่อเปิด Google Map</p>
+                                    </div>
+                                    <div className=" p-1 border bg-gray-100 rounded-lg flex items-center justify-center">
+                                      <FaMapMarkedAlt className="w-8 h-8 text-red-600" />
+                                    </div>
+                                  </div>
+                                  <p className="text-center mt-4">มารับได้ตั้งแต่วันที่ 15 ธันวาคมเป็นต้นไป</p>
+                                </a>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </section>
 
                   {/* ========== Next Button ========== */}
                   <div>
                     <Button type="submit" disabled={isLoading} className="w-full">
-                      ถัดไป
+                      {locationType === "store" ? "ยืนยันการลงทะเบียน" : "ถัดไป"}
                     </Button>
                   </div>
                 </form>

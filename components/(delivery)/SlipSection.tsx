@@ -135,6 +135,23 @@ export default function SlipSection({
         สลิปโอนเงินเพื่อยืนยัน
       </h2>
 
+      <div className="mt-4 bg-linear-to-r from-orange-50 to-amber-50 border-l-4 border-orange-500 rounded-lg p-4 shadow-sm">
+        <div className="flex items-start gap-4">
+          <div className="shrink-0">
+            <div className="flex items-center justify-center h-10 w-10 rounded-full bg-orange-100">
+              <span className="inline-block w-3 h-3 rounded-full bg-orange-500 animate-pulse" />
+            </div>
+          </div>
+          <div className="flex-1">
+            <h3 className="font-semibold text-orange-900 text-xl mb-1">ค่าจัดส่ง</h3>
+            <p className="text-sm text-orange-800 leading-relaxed">
+              โอนค่าจัดส่ง <span className="font-bold text-orange-900">100 บาท</span> ไปยังบัญชีที่ระบุ
+              และแนบหลักฐานสลิปการโอนเงิน
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Bank Transfer Information */}
       <div className="py-4">
         <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">

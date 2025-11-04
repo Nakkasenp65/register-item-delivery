@@ -9,6 +9,7 @@ import {
   Package,
   User,
   MapPin,
+  MapPinned,
   Phone,
   Calendar,
   Image as ImageIcon,
@@ -81,6 +82,54 @@ const ConfirmPageContent: React.FC = () => {
   const sendFlexMessage = async () => {
     setIsSending(true);
     try {
+      // สร้าง address/location box ตาม locationType
+      const locationBox =
+        delivery.locationType === "home"
+          ? {
+              type: "box" as const,
+              layout: "baseline" as const,
+              contents: [
+                {
+                  type: "text" as const,
+                  text: "ที่อยู่:",
+                  color: "#aaaaaa",
+                  size: "sm" as const,
+                  flex: 1,
+                },
+                {
+                  type: "text" as const,
+                  text: `${delivery.addressDetails || ""}, ${delivery.subDistrict || ""}, ${delivery.district || ""}, ${
+                    delivery.province || ""
+                  } ${delivery.postalCode || ""}`.trim(),
+                  wrap: true,
+                  color: "#666666",
+                  size: "sm" as const,
+                  flex: 5,
+                },
+              ],
+            }
+          : {
+              type: "box" as const,
+              layout: "baseline" as const,
+              contents: [
+                {
+                  type: "text" as const,
+                  text: "รับที่:",
+                  color: "#aaaaaa",
+                  size: "sm" as const,
+                  flex: 1,
+                },
+                {
+                  type: "text" as const,
+                  text: "ร้าน OK Mobile (15 ธ.ค. 68 เป็นต้นไป)",
+                  wrap: true,
+                  color: "#666666",
+                  size: "sm" as const,
+                  flex: 5,
+                },
+              ],
+            };
+
       const flexMessage = {
         type: "flex" as const,
         altText: "ข้อมูลการจัดส่ง",
@@ -103,6 +152,28 @@ const ConfirmPageContent: React.FC = () => {
                 margin: "md" as const,
                 spacing: "sm" as const,
                 contents: [
+                  {
+                    type: "box" as const,
+                    layout: "baseline" as const,
+                    contents: [
+                      {
+                        type: "text" as const,
+                        text: "รหัส:",
+                        color: "#aaaaaa",
+                        size: "sm" as const,
+                        flex: 1,
+                      },
+                      {
+                        type: "text" as const,
+                        text: delivery.trackingId || "N/A",
+                        wrap: true,
+                        color: "#1e40af",
+                        size: "sm" as const,
+                        flex: 5,
+                        weight: "bold" as const,
+                      },
+                    ],
+                  },
                   {
                     type: "box" as const,
                     layout: "baseline" as const,
@@ -145,27 +216,7 @@ const ConfirmPageContent: React.FC = () => {
                       },
                     ],
                   },
-                  {
-                    type: "box" as const,
-                    layout: "baseline" as const,
-                    contents: [
-                      {
-                        type: "text" as const,
-                        text: "ที่อยู่:",
-                        color: "#aaaaaa",
-                        size: "sm" as const,
-                        flex: 1,
-                      },
-                      {
-                        type: "text" as const,
-                        text: `${delivery.addressDetails}, ${delivery.subDistrict}, ${delivery.district}, ${delivery.province} ${delivery.postalCode}`,
-                        wrap: true,
-                        color: "#666666",
-                        size: "sm" as const,
-                        flex: 5,
-                      },
-                    ],
-                  },
+                  locationBox,
                   {
                     type: "box" as const,
                     layout: "baseline" as const,
@@ -266,14 +317,86 @@ const ConfirmPageContent: React.FC = () => {
               </div>
             </motion.div>
 
-            {/* สถานะการจัดส่ง - Modern Design */}
+            {/* Tracking ID Section */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.25 }}
+              className="bg-linear-to-r from-blue-500 to-indigo-600 rounded-2xl shadow-xl overflow-hidden"
+            >
+              <div className="p-6 text-white">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <p className="text-sm text-blue-100 mb-1">รหัสอ้างอิง (Tracking ID)</p>
+                    <p className="text-2xl font-bold ">{delivery.trackingId || "N/A"}</p>
+                  </div>
+                  <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
+                    <Package className="w-8 h-8 text-white" />
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* สถานะการจัดส่ง / ข้อมูลรับสินค้า - Modern Design */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3, type: "spring", stiffness: 100 }}
               className="relative overflow-hidden"
             >
-              {delivery.status === "pending" ? (
+              {delivery.locationType === "store" ? (
+                <div className="relative bg-white border border-indigo-200 rounded-2xl shadow-lg overflow-hidden">
+                  {/* Gradient Background Overlay */}
+                  <div className="absolute inset-0 bg-linear-to-br from-indigo-50 via-blue-50 to-indigo-100 opacity-60"></div>
+
+                  {/* Decorative Elements */}
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-400 rounded-full blur-3xl opacity-20 -mr-16 -mt-16"></div>
+                  <div className="absolute bottom-0 left-0 w-24 h-24 bg-blue-400 rounded-full blur-2xl opacity-20 -ml-12 -mb-12"></div>
+
+                  <div className="relative p-6">
+                    <div className="flex items-start gap-5">
+                      {/* Content Section */}
+                      <div className="flex-1 space-y-3">
+                        <div className="flex items-center gap-3 flex-wrap">
+                          {/* Icon Section */}
+                          <div className="shrink-0">
+                            <div className="relative">
+                              <div className="w-16 h-16 bg-linear-to-br from-indigo-400 to-blue-500 rounded-2xl flex items-center justify-center shadow-lg transform rotate-3 hover:rotate-6 transition-transform">
+                                <MapPinned className="w-8 h-8 text-white animate-pulse" />
+                              </div>
+                              <div className="absolute -top-1 -right-1 w-5 h-5 bg-blue-500 rounded-full animate-ping opacity-75"></div>
+                              <div className="absolute -top-1 -right-1 w-5 h-5 bg-blue-500 rounded-full"></div>
+                            </div>
+                          </div>
+                          <div>
+                            <h3 className="text-2xl font-bold text-gray-900">ร้าน OK Mobile</h3>
+                            <p className="text-sm text-gray-600 mt-1">รับสินค้าได้ตั้งแต่ 15 ธันวาคม 2568</p>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2.5">
+                          <div className="flex justify-center items-center gap-3 p-3 bg-white/60 backdrop-blur-sm rounded-xl border-2 border-indigo-200/50">
+                            <div>
+                              <p className="text-base text-black font-bold">
+                                <a
+                                  href="https://www.google.com/maps/place/OK+Mobile+Shop+%E0%B8%AA%E0%B8%B2%E0%B8%82%E0%B8%B2+%E0%B8%AB%E0%B9%89%E0%B8%B2%E0%B8%87%E0%B9%80%E0%B8%8B%E0%B9%87%E0%B8%99%E0%B9%80%E0%B8%95%E0%B8%AD%E0%B8%A3%E0%B9%8C%E0%B8%A7%E0%B8%B1%E0%B8%99/@13.7639334,100.5391967,21z/data=!4m6!3m5!1s0x30e29fcf8d4ea5a5:0x23cc79f7dccc9f87!8m2!3d13.7638505!4d100.5393062!16s%2Fg%2F11gy9m3fcg?entry=ttu&g_ep=EgoyMDI1MTAyOS4yIKXMDSoASAFQAw%3D%3D"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  กดที่นี่เพื่อเปิด Google Map
+                                </a>
+                              </p>
+                            </div>
+                            <div className="p-1 border bg-gray-100 rounded-lg flex items-center justify-center">
+                              <MapPinned className="w-8 h-8 text-blue-600" />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : delivery.status === "pending" ? (
                 <div className="relative bg-white border border-amber-200 rounded-2xl shadow-lg overflow-hidden">
                   {/* Gradient Background Overlay */}
                   <div className="absolute inset-0 bg-linear-to-br from-amber-50 via-orange-50 to-amber-100 opacity-60"></div>
@@ -394,46 +517,48 @@ const ConfirmPageContent: React.FC = () => {
               </div>
             </section>
 
-            {/* ข้อมูลที่อยู่ */}
-            <section>
-              <div className="flex items-center justify-between mb-4 border-b pb-2">
-                <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-                  <MapPin className="w-5 h-5 text-green-600" />
-                  ข้อมูลที่อยู่
-                </h2>
-                <button
-                  onClick={() => setIsEditModalOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                >
-                  <Edit className="w-4 h-4" />
-                  แก้ไข
-                </button>
-              </div>
-              <div className="space-y-3">
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <p className="text-sm text-gray-500 mb-1">รายละเอียดที่อยู่</p>
-                  <p className="text-gray-800">{delivery.addressDetails}</p>
+            {/* ข้อมูลที่อยู่ - แสดงเฉพาะเมื่อ locationType === 'home' */}
+            {delivery.locationType === "home" && (
+              <section>
+                <div className="flex items-center justify-between mb-4 border-b pb-2">
+                  <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                    <MapPin className="w-5 h-5 text-green-600" />
+                    ข้อมูลที่อยู่
+                  </h2>
+                  <button
+                    onClick={() => setIsEditModalOpen(true)}
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                  >
+                    <Edit className="w-4 h-4" />
+                    แก้ไข
+                  </button>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <p className="text-xs text-gray-500 mb-1">ตำบล/แขวง</p>
-                    <p className="text-sm text-gray-800 font-medium">{delivery.subDistrict}</p>
+                <div className="space-y-3">
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <p className="text-sm text-gray-500 mb-1">รายละเอียดที่อยู่</p>
+                    <p className="text-gray-800">{delivery.addressDetails}</p>
                   </div>
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <p className="text-xs text-gray-500 mb-1">อำเภอ/เขต</p>
-                    <p className="text-sm text-gray-800 font-medium">{delivery.district}</p>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <p className="text-xs text-gray-500 mb-1">จังหวัด</p>
-                    <p className="text-sm text-gray-800 font-medium">{delivery.province}</p>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <p className="text-xs text-gray-500 mb-1">รหัสไปรษณีย์</p>
-                    <p className="text-sm text-gray-800 font-medium">{delivery.postalCode}</p>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-xs text-gray-500 mb-1">ตำบล/แขวง</p>
+                      <p className="text-sm text-gray-800 font-medium">{delivery.subDistrict}</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-xs text-gray-500 mb-1">อำเภอ/เขต</p>
+                      <p className="text-sm text-gray-800 font-medium">{delivery.district}</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-xs text-gray-500 mb-1">จังหวัด</p>
+                      <p className="text-sm text-gray-800 font-medium">{delivery.province}</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-xs text-gray-500 mb-1">รหัสไปรษณีย์</p>
+                      <p className="text-sm text-gray-800 font-medium">{delivery.postalCode}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </section>
+              </section>
+            )}
 
             {/* สลิปโอนเงิน */}
             {delivery.slipImageUrl && (
@@ -498,19 +623,21 @@ const ConfirmPageContent: React.FC = () => {
         </div>
       </motion.div>
 
-      {/* Edit Address Modal */}
-      <EditAddressModal
-        open={isEditModalOpen}
-        onClose={() => setIsEditModalOpen(false)}
-        deliveryId={delivery._id}
-        initialData={{
-          postalCode: delivery.postalCode,
-          province: delivery.province,
-          district: delivery.district,
-          subDistrict: delivery.subDistrict,
-          addressDetails: delivery.addressDetails,
-        }}
-      />
+      {/* Edit Address Modal - แสดงเฉพาะเมื่อ locationType === 'home' */}
+      {delivery.locationType === "home" && (
+        <EditAddressModal
+          open={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          deliveryId={delivery._id}
+          initialData={{
+            postalCode: delivery.postalCode || "",
+            province: delivery.province || "",
+            district: delivery.district || "",
+            subDistrict: delivery.subDistrict || "",
+            addressDetails: delivery.addressDetails || "",
+          }}
+        />
+      )}
     </div>
   );
 };
