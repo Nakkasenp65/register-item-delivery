@@ -1,9 +1,11 @@
 "use client";
 
-import { ChevronDown, Copy, File, ImageIcon, Paperclip, Upload, X, AlertTriangle } from "lucide-react";
+import { ChevronDown, Copy, File, ImageIcon, Paperclip, Upload, X, AlertTriangle, CheckCircle } from "lucide-react";
 import Image from "next/image";
 import { useState } from "react";
 import jsQR from "jsqr";
+import { AnimatePresence, motion } from "framer-motion";
+import { createPortal } from "react-dom";
 
 interface SlipSectionProps {
   setAttachment: (file: File | null) => void;
@@ -20,11 +22,11 @@ export default function SlipSection({
   fileInputRef,
   attachment,
   previewUrl,
-  isLoading = false,
 }: SlipSectionProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [qrWarning, setQrWarning] = useState(false);
+  const [showToast, setShowToast] = useState(false);
 
   const detectQRCode = async (file: File): Promise<boolean> => {
     return new Promise((resolve) => {
@@ -121,8 +123,10 @@ export default function SlipSection({
     fileInputRef.current?.click();
   };
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText("209-3-12208-1");
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText("209-3-12208-1");
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 2500);
   };
 
   {
@@ -169,16 +173,43 @@ export default function SlipSection({
           </div>
           <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-gray-100 p-2">
             <span className="text-bg-dark font-bold tracking-wider">209-3-12208-1</span>
-            <button
+            <motion.button
               type="button"
               onClick={handleCopy}
-              className="bg-primary-pink flex items-center gap-1 rounded-lg px-2 py-2 text-xs text-black transition hover:text-white hover:bg-pink-700"
+              className="bg-white flex items-center gap-1 border-2 rounded-lg px-2 py-2 text-xs text-black border-gray-300 hover:border-gray-400"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              // add highly bouncing spring transition
+              transition={{ type: "spring", stiffness: 1000, damping: 20 }}
             >
               <Copy className="w-3 h-3" />
               คัดลอก
-            </button>
+            </motion.button>
           </div>
         </div>
+
+        {/* Toast Notification (rendered into document.body via portal so fixed is relative to viewport) */}
+        {typeof document !== "undefined" &&
+          createPortal(
+            <AnimatePresence mode="wait">
+              {showToast && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.9 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -10, scale: 0.9 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 20 }}
+                  className="fixed top-8 left-1/2 transform -translate-x-1/2 bg-white rounded-lg shadow-lg border border-gray-200 px-4 py-2 flex items-center gap-2 z-50"
+                >
+                  <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                    <CheckCircle className="w-6 h-6 text-green-600" />
+                  </div>
+                  <span className="text-base font-medium text-gray-800 text-nowrap">คัดลอกเลขบัญชีแล้ว!</span>
+                  <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+                </motion.div>
+              )}
+            </AnimatePresence>,
+            document.body
+          )}
 
         <button
           type="button"

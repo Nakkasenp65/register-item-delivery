@@ -71,7 +71,7 @@ const DeliveryPage: React.FC = () => {
 
   // ถ้ามีข้อมูลแล้ว redirect ไปหน้า confirm
   useEffect(() => {
-    if (existingData && existingData.data && existingData.data.length > 0) {
+    if (existingData) {
       router.push("/confirm");
     }
   }, [existingData, router]);
@@ -725,30 +725,30 @@ const DeliveryPage: React.FC = () => {
                       <Package className="w-6 h-6 text-blue-600" />
                       การรับสินค้า
                     </h2>
-                    <div className="flex gap-4">
+                    <div className="flex gap-4 text-sm">
                       <Button
                         type="button"
                         onClick={() => setLocationType("home")}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors duration-300 ${
+                        className={`flex flex-col justify-center items-center gap-2 py-2 rounded-lg transition-colors duration-300 ${
                           locationType === "home"
                             ? "bg-blue-500 text-white hover:bg-blue-600"
                             : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                         }`}
                       >
-                        <Home className={`w-5 h-5 ${locationType === "home" ? "text-white" : "text-gray-500"}`} />
+                        <Home className={`w-8 h-8 text-white`} />
                         ส่งไปยังที่อยู่
                       </Button>
                       <Button
                         type="button"
                         onClick={() => setLocationType("store")}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors duration-300 ${
+                        className={`flex flex-col justify-center items-center gap-2 py-2 rounded-lg transition-colors duration-300 ${
                           locationType === "store"
                             ? "bg-blue-500 text-white hover:bg-blue-600"
                             : "bg-gray-300 text-gray-700 hover:bg-gray-400"
                         }`}
                       >
-                        <Store className={`w-10 h-10 ${locationType === "store" ? "text-white" : "text-blue-500"}`} />
-                        รับกล่องสินค้าเองที่หน้าร้าน
+                        <Store className={`w-8 h-8 text-white`} />
+                        รับกล่องเองที่หน้าร้าน
                       </Button>
                     </div>
                     <div className="mt-3 text-base text-gray-600">

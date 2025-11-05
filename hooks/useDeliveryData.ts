@@ -13,7 +13,8 @@ interface DeliveryData {
   postalCode?: string;
   slipImageUrl?: string;
   createdAt: string;
-  status: string;
+  status: "pending" | "shipped";
+  shippingTrackingId: string;
   trackingId?: string;
   locationType?: "home" | "store";
 }
@@ -42,6 +43,6 @@ export default function useDeliveryData(lineUserId: string | null) {
     },
     enabled: !!lineUserId, // Only run query if lineUserId exists
     retry: 1,
-    staleTime: 30000, // Consider data fresh for 30 seconds
+    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
   });
 }

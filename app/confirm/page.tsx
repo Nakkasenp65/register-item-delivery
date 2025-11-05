@@ -18,6 +18,7 @@ import {
   Clock,
   CheckCircle2,
   Truck,
+  ExternalLinkIcon,
 } from "lucide-react";
 import { EditAddressModal } from "@/components/EditAddressModal";
 import { motion } from "framer-motion";
@@ -27,7 +28,6 @@ import liff from "@line/liff";
 const ConfirmPageContent: React.FC = () => {
   const { lineUserId } = useLiff();
   const { data, isLoading, isError, error } = useDeliveryData(lineUserId);
-  console.log(data);
   const [isSending, setIsSending] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
@@ -271,6 +271,11 @@ const ConfirmPageContent: React.FC = () => {
     }
   };
 
+  const handleExternalLink = () => {
+    const trackingUrl = `https://www.flashexpress.com/fle/tracking?se=${delivery.shippingTrackingId}`;
+    window.open(trackingUrl, "_blank");
+  };
+
   return (
     <div className="min-h-screen bg-white sm:py-10 ">
       <motion.div
@@ -447,7 +452,7 @@ const ConfirmPageContent: React.FC = () => {
                     </div>
                   </div>
                 </div>
-              ) : (
+              ) : delivery.status === "shipped" ? (
                 <div className="relative bg-white border border-green-200 rounded-2xl shadow-lg overflow-hidden">
                   {/* Gradient Background Overlay */}
                   <div className="absolute inset-0 bg-linear-to-br from-green-50 via-emerald-50 to-teal-100 opacity-60"></div>
@@ -478,14 +483,14 @@ const ConfirmPageContent: React.FC = () => {
                           </div>
                         </div>
 
-                        <div className="space-y-2.5">
+                        <div className="flex flex-col gap-2 ">
                           <div className="flex items-start gap-3 p-3 bg-white/60 backdrop-blur-sm rounded-xl border border-green-200/50">
                             <div className="shrink-0 w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
                               <Truck className="w-4 h-4 text-green-600" />
                             </div>
                             <div className="flex-1">
                               <p className="text-sm font-medium text-gray-900">สินค้าอยู่ในการจัดส่ง</p>
-                              <p className="text-xs text-gray-600 mt-0.5">ส่งมอบสินค้าให้กับผู้จัดส่งแล้ว</p>
+                              <p className="text-xs text-black mt-0.5">สามารถติดตามสถานะการจัดส่งได้ทันที</p>
                             </div>
                           </div>
                         </div>
@@ -493,8 +498,29 @@ const ConfirmPageContent: React.FC = () => {
                     </div>
                   </div>
                 </div>
-              )}
+              ) : null}
             </motion.div>
+
+            <section className="w-full flex">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                transition={{ type: "spring", stiffness: 1000, damping: 20 }}
+                onClick={handleExternalLink}
+                className="w-full flex flex-1 items-center justify-center border-2 border-black bg-[#F9EF1C] font-bold rounded-lg p-2 shadow-lg "
+              >
+                <span className="text-lg flex-1 flex items-center justify-center gap-2">
+                  ติดตามสถานะการจัดส่ง{" "}
+                  <Image
+                    src={"/flash.webp"}
+                    alt="Flash logo"
+                    width={96}
+                    height={96}
+                    className="w-12 h-auto overflow-hidden"
+                  />
+                </span>
+              </motion.button>
+            </section>
 
             {/* ข้อมูลส่วนตัว */}
             <section>
@@ -525,13 +551,15 @@ const ConfirmPageContent: React.FC = () => {
                     <MapPin className="w-5 h-5 text-green-600" />
                     ข้อมูลที่อยู่
                   </h2>
-                  <button
-                    onClick={() => setIsEditModalOpen(true)}
-                    className="flex items-center gap-2 px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                  >
-                    <Edit className="w-4 h-4" />
-                    แก้ไข
-                  </button>
+                  {delivery.status === "pending" && (
+                    <button
+                      onClick={() => setIsEditModalOpen(true)}
+                      className="flex items-center gap-2 px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    >
+                      <Edit className="w-4 h-4" />
+                      แก้ไข
+                    </button>
+                  )}
                 </div>
                 <div className="space-y-3">
                   <div className="bg-gray-50 rounded-lg p-4">
@@ -624,7 +652,7 @@ const ConfirmPageContent: React.FC = () => {
       </motion.div>
 
       {/* Edit Address Modal - แสดงเฉพาะเมื่อ locationType === 'home' */}
-      {delivery.locationType === "home" && (
+      {delivery.locationType === "home" && delivery.status === "pending" && (
         <EditAddressModal
           open={isEditModalOpen}
           onClose={() => setIsEditModalOpen(false)}
